@@ -11,30 +11,42 @@ ComPort = 'COM5'
 Board = pyfirmata.Arduino(ComPort)
 
 # SERVO HOME POSISIONS
+BaseServoCurrentAngle = 0
+LowJointServoCurrentAngle = 0
+HighJointServoCurrentAngle = 0
+HandTiltServoCurrentAngle = 0
+HandUpDownServoCurrentAngle = 0
+HandOpenCloseServoCurrentAngle = 0
 
-Board.digital[5].mode = pyfirmata.SERVO
-Board.digital[5].write(90)
-BaseServoCurrentAngle = 90
+# FUNCTIONS
 
-Board.digital[4].mode = pyfirmata.SERVO
-Board.digital[4].write(120)
-LowJointServoCurrentAngle = 120
 
-Board.digital[3].mode = pyfirmata.SERVO
-Board.digital[3].write(175)
-HighJointServoCurrentAngle = 175
+def servo_go_homepos():
+    global BaseServoCurrentAngle, LowJointServoCurrentAngle, HighJointServoCurrentAngle, HandUpDownServoCurrentAngle,\
+        HandTiltServoCurrentAngle, HandOpenCloseServoCurrentAngle
+    Board.digital[5].mode = pyfirmata.SERVO
+    Board.digital[5].write(90)
+    BaseServoCurrentAngle = 90
 
-Board.digital[2].mode = pyfirmata.SERVO
-Board.digital[2].write(107)
-HandTiltServoCurrentAngle = 107
+    Board.digital[4].mode = pyfirmata.SERVO
+    Board.digital[4].write(120)
+    LowJointServoCurrentAngle = 120
 
-Board.digital[6].mode = pyfirmata.SERVO
-Board.digital[6].write(50)
-HandUpDownServoCurrentAngle = 50
+    Board.digital[3].mode = pyfirmata.SERVO
+    Board.digital[3].write(175)
+    HighJointServoCurrentAngle = 175
 
-Board.digital[7].mode = pyfirmata.SERVO
-Board.digital[7].write(180)
-HandOpenCloseServoCurrentAngle = 180
+    Board.digital[2].mode = pyfirmata.SERVO
+    Board.digital[2].write(107)
+    HandTiltServoCurrentAngle = 107
+
+    Board.digital[6].mode = pyfirmata.SERVO
+    Board.digital[6].write(100)
+    HandUpDownServoCurrentAngle = 100
+
+    Board.digital[7].mode = pyfirmata.SERVO
+    Board.digital[7].write(180)
+    HandOpenCloseServoCurrentAngle = 180
 
 
 def move_base_servo(angle):
@@ -43,9 +55,16 @@ def move_base_servo(angle):
         BaseServoCurrentAngle += angle
         Board.digital[5].write(BaseServoCurrentAngle)
     else:
-        pass
+        if BaseServoCurrentAngle + angle > 180 and BaseServoCurrentAngle != 180:
+            Board.digital[5].write(180)
+            BaseServoCurrentAngle = 180
+        elif BaseServoCurrentAngle + angle < 0 and BaseServoCurrentAngle != 0:
+            Board.digital[5].write(0)
+            BaseServoCurrentAngle = 0
 
 
+servo_go_homepos()
+rotating_direction = 1
 # WEBCAM
 cap = cv2.VideoCapture(0)
 cap.set(3, 1280)
@@ -112,23 +131,36 @@ while True:
         x1, y1, x2, y2, ID = result
         IDsList.append(ID)
 
-    for result in resultsTraker:
-        x1, y1, x2, y2, ID = result
-        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-        w, h = x2 - x1, y2 - y1
-        cvzone.cornerRect(img, (x1, y1, w, h), l=15, rt=2, colorR=(255, 255, 0))
-        cvzone.putTextRect(img, f'{int(ID)}', (max(0, x1), max(35, y1 - 20)), scale=1, offset=3, thickness=1)
-        cx, cy = x1 + w // 2, y1 + h // 2
-        cv2.circle(img, (cx, cy), 5, (255, 0, 255), cv2.FILLED)
-        if ID == min(IDsList):
-            if leftline2[0] < cx <= leftline[0]:
-                move_base_servo(1)
-            elif cx <= leftline2[0]:
-                move_base_servo(4)
-            elif rightline2[0] > cx > rightline[0]:
-                move_base_servo(-1)
-            elif cx > rightline2[0]:
-                move_base_servo(-4)
+
+    if len(IDsList) > 0:
+        for result in resultsTraker:
+            x1, y1, x2, y2, ID = result
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            w, h = x2 - x1, y2 - y1
+            cvzone.cornerRect(img, (x1, y1, w, h), l=15, rt=2, colorR=(255, 255, 0))
+            cvzone.putTextRect(img, f'{int(ID)}', (max(0, x1), max(35, y1 - 20)), scale=1, offset=3, thickness=1)
+            cx, cy = x1 + w // 2, y1 + h // 2
+            cv2.circle(img, (cx, cy), 5, (255, 0, 255), cv2.FILLED)
+            if ID == min(IDsList):
+                if leftline2[0] < cx <= leftline[0]:
+                    move_base_servo(0.7)
+                elif cx <= leftline2[0]:
+                    move_base_servo(4)
+                elif rightline2[0] > cx > rightline[0]:
+                    move_base_servo(-0.7)
+                elif cx > rightline2[0]:
+                    move_base_servo(-4)
+    else:
+        if 0 < BaseServoCurrentAngle < 180:
+            move_base_servo(rotating_direction*1)
+        elif BaseServoCurrentAngle == 0:
+            rotating_direction = 1
+            move_base_servo(rotating_direction*1)
+        elif BaseServoCurrentAngle == 180:
+            rotating_direction = -1
+            move_base_servo(rotating_direction*1)
+        print(BaseServoCurrentAngle)
+
 
     cv2.imshow('webcam', img)
     cv2.waitKey(1)
